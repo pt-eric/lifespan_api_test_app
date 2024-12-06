@@ -91,18 +91,43 @@ namespace HousingAPITestApp
                 request.Method = cmbMethod.Text;
                 request.Headers.Add(HttpRequestHeader.Authorization, AuthorizationHeader(signature.ToSignature()));
 
-                //var response = request.GetResponse();
+                
                 string responseText = "";
                 using (var response = (HttpWebResponse)request.GetResponse())
                 {
-                    var encoding = Encoding.GetEncoding(response.CharacterSet);
+                    var responseType = response.ContentType;
+                    if (!String.IsNullOrEmpty(GetFileExtensionFromContentType(responseType)))
+                    {
+                        using (SaveFileDialog saveFileDialog = new SaveFileDialog())
+                        {
+                            saveFileDialog.Filter = "All files (*.*)|*.*|PDF files (*.pdf)|*.pdf|Word Document (*.docx)|*.docx|Word 97-2004 Documents (*.doc)|*.doc|Image (jpeg) (*.jpeg)|*.jpeg|Image (jpg) (*.jpg)|*.jpg|Image (png) (*.png)|*.png";
+                            saveFileDialog.Title = "Save File";
+                            if (saveFileDialog.ShowDialog() == DialogResult.OK)
+                            {
+                                // Get the selected file path
+                                string filePath = saveFileDialog.FileName;
 
-                    using (var responseStream = response.GetResponseStream())
-                    using (var reader = new StreamReader(responseStream, encoding))
-                        responseText = reader.ReadToEnd();
+                                // Fetch File data from an HTTP request
+                                using (Stream stream = response.GetResponseStream())
+                                using (FileStream fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.ReadWrite))
+                                {
+                                    stream.CopyTo(fileStream);
+                                }
+                                MessageBox.Show("File saved successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        var encodingInfoNotFound = string.IsNullOrEmpty(response.CharacterSet) || !Encoding.GetEncodings().Any(en => en.Name == response.CharacterSet);
+
+                        using (var responseStream = response.GetResponseStream())
+                        using (var reader = encodingInfoNotFound ? new StreamReader(responseStream) : new StreamReader(responseStream, Encoding.GetEncoding(response.CharacterSet)))
+                            responseText = reader.ReadToEnd();
+                        OutputBox.Text = "";
+                        OutputBox.AppendText("Response:\r\n" + responseText);
+                    }
                 }
-                OutputBox.Text = "";
-                OutputBox.AppendText("Response:\r\n" + responseText);
 
             }
             catch (Exception ex)
@@ -115,6 +140,21 @@ namespace HousingAPITestApp
                 });
                 
             }
+        }
+
+        private string GetFileExtensionFromContentType(string contentType)
+        {
+            // Use simple if-else structure instead of switch with patterns
+            if (contentType.ToLower() == "application/pdf") return ".pdf";
+            if (contentType.ToLower() == "image/png") return ".png";
+            if (contentType.ToLower() == "image/jpeg") return ".jpg";
+            if (contentType.ToLower() == "image/jpg") return ".jpg";
+            if (contentType.ToLower() == "application/msword") return ".doc";
+            if (contentType.ToLower() == "application/vnd.openxmlformats-officedocument.wordprocessingml.document") return ".docx";
+            if (contentType.ToLower() == "text/plain") return ".txt";
+
+            // Unknown content type
+            return string.Empty;
         }
     }
 }
